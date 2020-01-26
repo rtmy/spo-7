@@ -126,15 +126,26 @@ class Lexer:
 # text = 'x = hs; x set 3 4; x set 4 5; x [ 3 ];'
 
 text = '''
-function test (x) {\n
+function testuno (x) {
     syncronized {
-        for (i = 0; i<10; i = i+1) {  \n
-            ; \n
-        } \n
-    }\n
+        for (i = 0; i<10; i = i+1) {
+            ;
+        } 
+    }
 }
-test(1) thread;
-test(2) thread;
+
+function testdue (x) {
+    syncronized {
+        for (i = 0; i<10; i = i+1) {
+            ;
+        } 
+    }
+}
+
+
+testuno(1) thread;
+testdue(2) thread;
+
 '''
 
 
@@ -206,16 +217,17 @@ class Parser:
             # new_res = parse.expr(self.n+2)
             # new_res = parse.expr(self.n+5)
             new_res = parse.expr(self.n+3)
-            rees1 = parse.stmt(self.n+4)
-            rees2 = parse.stmt(self.n+5)
-            node.descendants += [new_res, rees1, rees2]
+            fd1 = parse.expr(self.n+4)
+            fc1 = parse.stmt(self.n+12)
+            fc2 = parse.stmt(self.n+13)
+            # fc2 = parse.stmt(self.n+22)
+            node.descendants += [new_res, fd1, fc1, fc2]
         return node
 
     def expr(self, n):
         if n > len(self.tokenList):
             return None
         curTok = self.tokenList[n]
-        print('cur', curTok, n, self.tokenList[n-1])
         node = Node(curTok)
         sum_n = 0
 
@@ -230,20 +242,19 @@ class Parser:
 
         elif curTok.name == 'FUNCTION_DEF':
             self.stmt(n+1)
-            m1 = self.match('VAR', n+1)
+            func_name = self.match('VAR', n+1)
             m2 = self.match('OP_BRACE', n+2)
-            m3 = self.match('VAR', n+3)
+            arg_name = self.match('VAR', n+3)
             m4 = self.match('CL_BRACE', n+4)
 
             brace = self.match('CR_OP_BRACE', n+5)
             res = self.expr(n+6)
-
+            node.value.value = (func_name.value, arg_name.value)
             node.descendants += [res]
 
         elif curTok.name == 'SYNCRONIZED':
             res = self.expr(n+2)
             node.descendants += [res]
-            # return res
 
         elif curTok.name == 'FOR_KW':
             # TODO: n+* можно поправить, заменив на self.n. проверить, должно работать на корректных входах. на некорректных выдавать ошибку
@@ -266,9 +277,6 @@ class Parser:
             # child = self.expr(n+2)
             # node.descendants += [child]
             # self.stmt(n)
-        elif curTok.name == 'VAR':
-            print('here')
-            # print(curTok.name, self.match('OP_BRACE', n+1), self.match('VAR', n+2), self.match('CL_BRACE', n+3))
         else:
             res = self.stmt(self.n)
             return Node(res)
@@ -278,7 +286,8 @@ class Parser:
 
     def stmt(self, n):
         varName = self.match('VAR', n)
-        op_brace, cl_brace, thread = self.match('OP_BRACE', n+1), self.match('CL_BRACE', n+3), self.match('THREAD', n+4)
+        op_brace, cl_brace, thread = self.match(
+            'OP_BRACE', n+1), self.match('CL_BRACE', n+3), self.match('THREAD', n+4)
 
         if all([varName, op_brace, cl_brace]):
             node = Node(Token('FUNCTION_CALL', True if thread else False))
@@ -313,8 +322,6 @@ class Parser:
 
         node = Node(op)
 
-        # print('oop', op, varName, val)
-
         node.descendants += [Node(varName)]
         if val:
             node.descendants += [Node(val)]
@@ -330,7 +337,6 @@ class Parser:
             self.n += 1
             return self.tokenList[n]
         else:
-            # self.n += 1
             return False
             # raise Exception('Syntax error', expected, self.tokenList[n].name)
 
@@ -355,8 +361,6 @@ def flatten(l):
 
 flatten(polishReverse)
 bucket = [b for b in bucket if b is not None]
-
-print('new polish', bucket)
 
 
 class LinkedNode:
@@ -434,11 +438,10 @@ class HashSet:
         return str(ret)
 
 
-# TODO: выполнение просто функций, по очереди, т.е. когда они syncronized по умолчанию
 # TODO: выполнение функций с блокировками
 class Interpreter:
     # TODO: интерпретатор должен сплодить самого себя и уметь выполнять инструкции поочередно
-    # например, интерпретировать функцию
+    # например, для выполнения функции
     def __init__(self, operandList):
         self.operandList = operandList
         self.varTable = {}
@@ -496,7 +499,6 @@ class Interpreter:
         elif name == 'PUSH':
             val = self.stack.pop()
             key = self.stack.pop()
-            # var = stack.pop()
 
             op1_value = op1 if type(op1) is not tuple else op1[1]
             op2_value = op2 if type(op2) is not tuple else op2[1]
@@ -550,7 +552,6 @@ class Interpreter:
             app = self.opTable[l]['app']
 
             while(op(self.varTable[l])):
-                print('varTable', self.varTable)
                 self.varTable[l] = app(self.varTable[l])
 
         elif name == 'FUNCTION_CALL':
@@ -568,11 +569,11 @@ class Interpreter:
             pass
 
         print('stack', self.stack)
-        print('varTable', self.varTable)
+        print(self.varTable)
 
-        for k in self.varTable.keys():
-            if self.varTable[k] and k not in ('last',):
-                print(k, self.varTable[k])
+        # for k in self.varTable.keys():
+        #     if self.varTable[k] and k not in ('last',):
+        #         print(k, self.varTable[k])
         print('-----')
 
     def next(self):
@@ -582,7 +583,7 @@ class Interpreter:
 
     def __call__(self):
         while self.op_id < len(self.operandList):
-            print('op_id', self.op_id, len(self.operandList))
+            print('iteration', self.op_id, '/', len(self.operandList)-1)
             self.next()
 
 
