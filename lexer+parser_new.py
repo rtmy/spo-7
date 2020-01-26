@@ -56,6 +56,8 @@ class Lexer:
         elif buffer == 'function':
             return 'FUNCTION_DEF'
         # TODO: для function_run, thread
+        elif buffer == 'call':
+            return 'FUNCTION_CALL'
         elif buffer == 'for':
             return 'FOR_KW'
         elif buffer == 'push':
@@ -119,11 +121,14 @@ class Lexer:
 # }'''
 # text = 'x = hs; x set 3 4; x set 4 5; x [ 3 ];'
 
-text = '''function test (x) {\n
+text = '''
+function test (x) {\n
     for (i = 0; i<10; i = i+1) {  \n
         ; \n
     } \n
-};
+}
+test(1);
+test(2);
 '''
 
 
@@ -132,8 +137,6 @@ future_text = '''function test (x) {\n
         ; \n
     } \n
 };
-
-run test(2);
 
 thread test(10);
 thread test(20);
@@ -169,6 +172,8 @@ class Node:
         for d in self.descendants:
             if d:
                 res.append(d.toPolishReverse())
+        if self.value and self.value.name == 'FUNCTION_DEF':
+            res = [('FUNCTION_DEF_END', 'FUNCTION_DEF_END')] + res
         if self.value:
             res.append((self.value.name, self.value.value))
         return res
@@ -191,20 +196,35 @@ class Parser:
         while self.n < len(self.tokenList) and new_res:
             # new_res = parse.expr(self.n+1) # HS, LL, iter
             # new_res = parse.expr(self.n+2)
-            new_res = parse.expr(self.n+5)
-            node.descendants.append(new_res)
+            # new_res = parse.expr(self.n+5)
+            new_res = parse.expr(self.n+3)
+            # res n+5
+            rees1 = parse.stmt(self.n+5)
+            rees2 = parse.stmt(self.n+6)
+            print('rr', rees2)
+            node.descendants += [new_res, rees1, rees2]
         return node
 
     def expr(self, n):
         if n > len(self.tokenList):
             return None
         curTok = self.tokenList[n]
-        print('cur', curTok)
+        print('cur', curTok, n, self.tokenList[n-1])
         node = Node(curTok)
         sum_n = 0
 
         # TODO: объявление функции
-        if curTok.name == 'FUNCTION_DEF':
+        if curTok.name == 'FUNCTION_CALL':
+            print('function call')
+            func_name = self.match('VAR', n+1)
+            m2 = self.match('OP_BRACE', n+2)
+            arg = self.match('VAR', n+3)
+            m4 = self.match('CL_BRACE', n+4)
+
+            # res = self.expr(n+5)
+            node.descendants += [func_name, arg]
+
+        elif curTok.name == 'FUNCTION_DEF':
             self.stmt(n+1)
             m1 = self.match('VAR', n+1)
             m2 = self.match('OP_BRACE', n+2)
@@ -212,12 +232,11 @@ class Parser:
             m4 = self.match('CL_BRACE', n+4)
 
             brace = self.match('CR_OP_BRACE', n+5)
-
             res = self.expr(n+6)
 
             # TODO: куда-то записать функцию
-            # node.descendants += [res]
-            return res
+            node.descendants += [res]
+            # return res
 
         elif curTok.name == 'FOR_KW':
             # TODO: n+* можно поправить, заменив на self.n. проверить, должно работать на корректных входах. на некорректных выдавать ошибку
@@ -229,27 +248,41 @@ class Parser:
             self.match('CL_BRACE', n+1)
             brace = self.match('CR_OP_BRACE', n+14)
 
-            res = self.expr(n+15)
+            # res = self.expr(n+15)
             # res = self.expr(n+2)
-            # res = parse.stmt(n+3)
-            print('res', res)
+            # res = parse.stmt(n+15)
 
             node.descendants += [index_assignation,
-                                 stop_condition, iterator, res]
+                                 stop_condition, iterator]
         elif curTok.name == 'CR_CL_BRACE':
             return None
-            # child = self.expr(n)
+            # child = self.expr(n+2)
             # node.descendants += [child]
             # self.stmt(n)
+        elif curTok.name == 'VAR':
+            print('here')
+            # print(curTok.name, self.match('OP_BRACE', n+1), self.match('VAR', n+2), self.match('CL_BRACE', n+3))
         else:
             res = self.stmt(self.n)
             return Node(res)
-            # res.print('')
+            res.print('')
 
         return node
 
     def stmt(self, n):
         varName = self.match('VAR', n)
+        op_brace, cl_brace = self.match('OP_BRACE', n+1), self.match('CL_BRACE', n+3)
+
+        print('oo', op_brace, cl_brace)
+
+        if all([varName, op_brace, cl_brace]):
+            node = Node(Token('FUNCTION_CALL', 'FUNCTION_CALL'))
+            arg_num = self.tokenList[n+2]
+            node.descendants = [
+                Node(Token(varName.value, arg_num))
+            ]
+            return node
+
         op = self.match('ASSIGN_OP', n+1)
         if not op:
             op = self.match('LESS_OP', n+1)
@@ -396,6 +429,8 @@ class HashSet:
         return str(ret)
 
 
+# TODO: выполнение просто функций, по очереди, т.е. когда они syncronized по умолчанию
+# TODO: выполнение функций с блокировками
 class Interpreter:
     # TODO: интерпретатор должен сплодить самого себя и уметь выполнять инструкции поочередно
     # например, интерпретировать функцию
@@ -405,12 +440,24 @@ class Interpreter:
         self.opTable = {}
         self.op_id = 0
         self.stack = []
+        self.parsingFunction = False
 
     def next_step(self, op):
         name = op[0]
         value = op[1]
 
-        if name in ('VAR', 'NUMBER', 'LL', 'HS'):
+        if self.parsingFunction and name != 'FUNCTION_DEF':
+            self.functionOperandList.append(op)
+        elif name == 'FUNCTION_DEF_END':
+            self.parsingFunction = True
+            self.functionOperandList = []
+        elif name == 'FUNCTION_DEF':
+            self.parsingFunction = False
+            self.varTable[value] = self.functionOperandList
+            self.functionOperandList = []
+        elif name == 'FUNCTION_RUN':
+            print('now running')
+        elif name in ('VAR', 'NUMBER', 'LL', 'HS'):
             self.stack.append(op)
         elif name == 'ASSIGN_OP':
             op1 = self.stack.pop()
@@ -501,12 +548,8 @@ class Interpreter:
                 print('varTable', self.varTable)
                 self.varTable[l] = app(self.varTable[l])
 
-        elif name == 'FUNCTION_DEF':
-            print('were here')
-            # парсим и записываем, но не выполняем
-            pass
-
-        elif name == 'FUNCTION_RUN':
+        elif name == 'FUNCTION_CALL':
+            print('considered this')
             # выполняем по одной за одной
             # TODO: оператор вызова функции, функция берется из таблицы по имени переменной
             # TODO: вызов подразумевает замену в таблице значений входными аргументами, выполнение инструкции за инструкциеей
