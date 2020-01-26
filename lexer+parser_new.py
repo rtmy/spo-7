@@ -55,6 +55,8 @@ class Lexer:
             return False
         elif buffer == 'function':
             return 'FUNCTION_DEF'
+        elif buffer == 'syncronized':
+            return 'SYNCRONIZED'
         # TODO: для function_run, thread
         elif buffer == 'call':
             return 'FUNCTION_CALL'
@@ -90,7 +92,7 @@ class Lexer:
             return None
 
     def getTokenValue(self, buffer, name):
-        if name in ('FOR_KW', 'OP_BRACE', 'CL_BRACE', 'ASSIGN_OP', 'LESS_OP', 'BIGGER_OP', 'PUSH', 'SET', 'FUNCTION_DEF'):
+        if name in ('FOR_KW', 'OP_BRACE', 'CL_BRACE', 'ASSIGN_OP', 'LESS_OP', 'BIGGER_OP', 'PUSH', 'SET', 'FUNCTION_DEF', 'SYNCRONIZED'):
             value = None
         elif name == 'REFERENCE':
             value = re.match('\[(.+)\]', buffer).groups()[0]
@@ -123,23 +125,27 @@ class Lexer:
 
 text = '''
 function test (x) {\n
-    for (i = 0; i<10; i = i+1) {  \n
-        ; \n
-    } \n
+    syncronized {
+        for (i = 0; i<10; i = i+1) {  \n
+            ; \n
+        } \n
+    }\n
 }
 test(1);
 test(2);
 '''
 
 
-future_text = '''function test (x) {\n
-    for (i = 0; i<10; i = i+1) {  \n
-        ; \n
-    } \n
-};
-
-thread test(10);
-thread test(20);
+future_text = '''
+function test (x) {\n
+    syncronized {
+        for (i = 0; i<10; i = i+1) {  \n
+            ; \n
+        } \n
+    }\n
+}
+test(1) thread;
+test(2) thread;
 '''
 
 print(text)
@@ -198,10 +204,8 @@ class Parser:
             # new_res = parse.expr(self.n+2)
             # new_res = parse.expr(self.n+5)
             new_res = parse.expr(self.n+3)
-            # res n+5
-            rees1 = parse.stmt(self.n+5)
-            rees2 = parse.stmt(self.n+6)
-            print('rr', rees2)
+            rees1 = parse.stmt(self.n+4)
+            rees2 = parse.stmt(self.n+5)
             node.descendants += [new_res, rees1, rees2]
         return node
 
@@ -220,8 +224,6 @@ class Parser:
             m2 = self.match('OP_BRACE', n+2)
             arg = self.match('VAR', n+3)
             m4 = self.match('CL_BRACE', n+4)
-
-            # res = self.expr(n+5)
             node.descendants += [func_name, arg]
 
         elif curTok.name == 'FUNCTION_DEF':
@@ -234,7 +236,10 @@ class Parser:
             brace = self.match('CR_OP_BRACE', n+5)
             res = self.expr(n+6)
 
-            # TODO: куда-то записать функцию
+            node.descendants += [res]
+
+        elif curTok.name == 'SYNCRONIZED':
+            res = self.expr(n+2)
             node.descendants += [res]
             # return res
 
@@ -440,19 +445,19 @@ class Interpreter:
         self.opTable = {}
         self.op_id = 0
         self.stack = []
-        self.parsingFunction = False
+        self.readingFunction = False
 
     def next_step(self, op):
         name = op[0]
         value = op[1]
 
-        if self.parsingFunction and name != 'FUNCTION_DEF':
+        if self.readingFunction and name != 'FUNCTION_DEF':
             self.functionOperandList.append(op)
         elif name == 'FUNCTION_DEF_END':
-            self.parsingFunction = True
+            self.readingFunction = True
             self.functionOperandList = []
         elif name == 'FUNCTION_DEF':
-            self.parsingFunction = False
+            self.readingFunction = False
             self.varTable[value] = self.functionOperandList
             self.functionOperandList = []
         elif name == 'FUNCTION_RUN':
