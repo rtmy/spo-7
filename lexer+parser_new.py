@@ -57,6 +57,8 @@ class Lexer:
             return 'FUNCTION_DEF'
         elif buffer == 'syncronized':
             return 'SYNCRONIZED'
+        elif buffer == 'thread':
+            return 'THREAD'
         # TODO: для function_run, thread
         elif buffer == 'call':
             return 'FUNCTION_CALL'
@@ -131,8 +133,8 @@ function test (x) {\n
         } \n
     }\n
 }
-test(1);
-test(2);
+test(1) thread;
+test(2) thread;
 '''
 
 
@@ -276,12 +278,10 @@ class Parser:
 
     def stmt(self, n):
         varName = self.match('VAR', n)
-        op_brace, cl_brace = self.match('OP_BRACE', n+1), self.match('CL_BRACE', n+3)
-
-        print('oo', op_brace, cl_brace)
+        op_brace, cl_brace, thread = self.match('OP_BRACE', n+1), self.match('CL_BRACE', n+3), self.match('THREAD', n+4)
 
         if all([varName, op_brace, cl_brace]):
-            node = Node(Token('FUNCTION_CALL', 'FUNCTION_CALL'))
+            node = Node(Token('FUNCTION_CALL', True if thread else False))
             arg_num = self.tokenList[n+2]
             node.descendants = [
                 Node(Token(varName.value, arg_num))
