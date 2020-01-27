@@ -127,7 +127,7 @@ class Lexer:
 
 text = '''
 function testuno (x) {
-    syncronized {
+    syncronized l {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
@@ -135,7 +135,7 @@ function testuno (x) {
 }
 
 function testdue (x) {
-    syncronized {
+    syncronized l {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
@@ -146,19 +146,6 @@ function testdue (x) {
 testuno(5) thread;
 testdue(10) thread;
 
-'''
-
-
-future_text = '''
-function test (x) {\n
-    syncronized {
-        for (i = 0; i<10; i = i+1) {  \n
-            ; \n
-        } \n
-    }\n
-}
-test(1) thread;
-test(2) thread;
 '''
 
 print(text)
@@ -228,6 +215,7 @@ class Parser:
         if n > len(self.tokenList):
             return None
         curTok = self.tokenList[n]
+        print('ct', curTok)
         node = Node(curTok)
         sum_n = 0
 
@@ -253,7 +241,10 @@ class Parser:
             node.descendants += [res]
 
         elif curTok.name == 'SYNCRONIZED':
-            res = self.expr(n+2)
+            lock_name = self.match('VAR', n+1)
+            print('gott', lock_name)
+            node.value.value = lock_name.value
+            res = self.expr(n+3)
             node.descendants += [res]
 
         elif curTok.name == 'FOR_KW':
@@ -592,7 +583,8 @@ class Interpreter:
 
     def __call__(self):
         while self.op_id < len(self.operandList):
-            print('iteration', self.op_id, '/', len(self.operandList)-1, self.operandList[self.op_id])
+            print('iteration', self.op_id, '/', len(self.operandList) -
+                  1, self.operandList[self.op_id])
             self.next()
 
 
