@@ -242,7 +242,6 @@ class Parser:
 
         elif curTok.name == 'SYNCRONIZED':
             lock_name = self.match('VAR', n+1)
-            print('gott', lock_name)
             node.value.value = lock_name.value
             res = self.expr(n+3)
             node.descendants += [res]
