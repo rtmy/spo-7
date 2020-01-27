@@ -128,7 +128,7 @@ class Lexer:
 text = '''
 function testuno (x) {
     syncronized {
-        for (i = 0; i<10; i = i+1) {
+        for (i = 0; i<a; i = i+1) {
             ;
         } 
     }
@@ -291,9 +291,9 @@ class Parser:
 
         if all([varName, op_brace, cl_brace]):
             node = Node(Token('FUNCTION_CALL', True if thread else False))
-            arg_num = self.tokenList[n+2]
+            arg_num = self.tokenList[n+2].value
             node.descendants = [
-                Node(Token(varName.value, arg_num))
+                Node(Token('FUNCTION_REF', (varName.value, arg_num)))
             ]
             return node
 
@@ -442,9 +442,10 @@ class HashSet:
 class Interpreter:
     # TODO: интерпретатор должен сплодить самого себя и уметь выполнять инструкции поочередно
     # например, для выполнения функции
-    def __init__(self, operandList):
+    def __init__(self, operandList, varTable):
         self.operandList = operandList
-        self.varTable = {}
+        print('in op list:', self.operandList)
+        self.varTable = varTable if varTable else {}
         self.opTable = {}
         self.op_id = 0
         self.stack = []
@@ -453,18 +454,19 @@ class Interpreter:
     def next_step(self, op):
         name = op[0]
         value = op[1]
+        print('having', op)
 
         if self.readingFunction and name != 'FUNCTION_DEF':
+            print('sfolp', self.functionOperandList)
             self.functionOperandList.append(op)
+            print('appending', op)
         elif name == 'FUNCTION_DEF_END':
             self.readingFunction = True
             self.functionOperandList = []
         elif name == 'FUNCTION_DEF':
             self.readingFunction = False
-            self.varTable[value] = self.functionOperandList
+            self.varTable[value[0]] = self.functionOperandList
             self.functionOperandList = []
-        elif name == 'FUNCTION_RUN':
-            print('now running')
         elif name in ('VAR', 'NUMBER', 'LL', 'HS'):
             self.stack.append(op)
         elif name == 'ASSIGN_OP':
@@ -480,6 +482,7 @@ class Interpreter:
                 op1_value = HashSet()
 
             self.varTable[op2_value] = op1_value
+            print('op1_value', op1_value, 'op2_value', op2_value)
             self.varTable['last'] = op2_value
 
             print(self.varTable)
@@ -515,7 +518,11 @@ class Interpreter:
             if op2[1] not in self.opTable.keys():
                 self.opTable[op2[1]] = {}
             opz_value = op1 if type(op1) is not tuple else op1[1]
-            self.opTable[op2[1]]['comp'] = lambda x: x < int(opz_value)
+
+            if not isinstance(opz_value, int):
+                opz_value = int(self.varTable[opz_value])
+
+            self.opTable[op2[1]]['comp'] = lambda x: x < opz_value
         elif name == 'BIGGER_OP':
             op1 = self.stack.pop()
             op2 = self.stack.pop()
@@ -547,19 +554,26 @@ class Interpreter:
             self.stack.append(res)
 
         elif name == 'FOR_KW':
+            print('DEBUG', self.varTable, self.opTable, self.stack)
             l = self.varTable['last']
             op = self.opTable[l]['comp']
             app = self.opTable[l]['app']
 
             while(op(self.varTable[l])):
                 self.varTable[l] = app(self.varTable[l])
+                print('during for', self.varTable)
+
+        elif name == 'FUNCTION_REF':
+            self.stack.append(op)
 
         elif name == 'FUNCTION_CALL':
             print('considered this')
-            # выполняем по одной за одной
-            # TODO: оператор вызова функции, функция берется из таблицы по имени переменной
-            # TODO: вызов подразумевает замену в таблице значений входными аргументами, выполнение инструкции за инструкциеей
-            pass
+            func_name = self.stack.pop()
+            print('from now on',)
+            i1 = Interpreter(self.varTable[func_name[1][0]], {
+                'a': '3'
+            })
+            i1()
 
         elif name == 'THREAD':
             # TODO: ключевое слово (тред название_функции) для вызова программы в треде
@@ -583,9 +597,9 @@ class Interpreter:
 
     def __call__(self):
         while self.op_id < len(self.operandList):
-            print('iteration', self.op_id, '/', len(self.operandList)-1)
+            print('iteration', self.op_id, '/', len(self.operandList)-1, self.operandList[self.op_id])
             self.next()
 
 
-i = Interpreter(bucket)
+i = Interpreter(bucket, {})
 i()
