@@ -127,19 +127,15 @@ class Lexer:
 # TODO: убираем синкронайзд - должны запускаться параллельно
 text = '''
 function testuno (x) {
-    syncronized l {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
-    }
 }
 
 function testdue (x) {
-    syncronized l {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
-    }
 }
 
 
@@ -217,6 +213,7 @@ class Parser:
         if n > len(self.tokenList):
             return None
         curTok = self.tokenList[n]
+        print('ct', curTok)
         node = Node(curTok)
         sum_n = 0
 
