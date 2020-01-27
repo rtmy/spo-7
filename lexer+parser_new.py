@@ -128,7 +128,7 @@ class Lexer:
 text = '''
 function testuno (x) {
     syncronized {
-        for (i = 0; i<a; i = i+1) {
+        for (i = 0; i<x; i = i+1) {
             ;
         } 
     }
@@ -136,15 +136,15 @@ function testuno (x) {
 
 function testdue (x) {
     syncronized {
-        for (i = 0; i<10; i = i+1) {
+        for (i = 0; i<x; i = i+1) {
             ;
         } 
     }
 }
 
 
-testuno(1) thread;
-testdue(2) thread;
+testuno(5) thread;
+testdue(10) thread;
 
 '''
 
@@ -218,8 +218,8 @@ class Parser:
             # new_res = parse.expr(self.n+5)
             new_res = parse.expr(self.n+3)
             fd1 = parse.expr(self.n+4)
-            fc1 = parse.stmt(self.n+12)
-            fc2 = parse.stmt(self.n+13)
+            fc1 = parse.stmt(self.n+10)
+            fc2 = parse.stmt(self.n+11)
             # fc2 = parse.stmt(self.n+22)
             node.descendants += [new_res, fd1, fc1, fc2]
         return node
@@ -465,7 +465,7 @@ class Interpreter:
             self.functionOperandList = []
         elif name == 'FUNCTION_DEF':
             self.readingFunction = False
-            self.varTable[value[0]] = self.functionOperandList
+            self.varTable[value[0]] = (value[1], self.functionOperandList)
             self.functionOperandList = []
         elif name in ('VAR', 'NUMBER', 'LL', 'HS'):
             self.stack.append(op)
@@ -569,9 +569,10 @@ class Interpreter:
         elif name == 'FUNCTION_CALL':
             print('considered this')
             func_name = self.stack.pop()
+            arg_name = self.varTable[func_name[1][0]][0]
             print('from now on',)
-            i1 = Interpreter(self.varTable[func_name[1][0]], {
-                'a': '3'
+            i1 = Interpreter(self.varTable[func_name[1][0]][1], {
+                arg_name: func_name[1][1]
             })
             i1()
 
