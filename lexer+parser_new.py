@@ -454,12 +454,9 @@ class Interpreter:
     def next_step(self, op):
         name = op[0]
         value = op[1]
-        print('having', op)
 
         if self.readingFunction and name != 'FUNCTION_DEF':
-            print('sfolp', self.functionOperandList)
             self.functionOperandList.append(op)
-            print('appending', op)
         elif name == 'FUNCTION_DEF_END':
             self.readingFunction = True
             self.functionOperandList = []
@@ -482,7 +479,6 @@ class Interpreter:
                 op1_value = HashSet()
 
             self.varTable[op2_value] = op1_value
-            print('op1_value', op1_value, 'op2_value', op2_value)
             self.varTable['last'] = op2_value
 
             print(self.varTable)
@@ -554,23 +550,21 @@ class Interpreter:
             self.stack.append(res)
 
         elif name == 'FOR_KW':
-            print('DEBUG', self.varTable, self.opTable, self.stack)
             l = self.varTable['last']
             op = self.opTable[l]['comp']
             app = self.opTable[l]['app']
 
+            print('on FOR')
             while(op(self.varTable[l])):
+                print(self.varTable)
                 self.varTable[l] = app(self.varTable[l])
-                print('during for', self.varTable)
 
         elif name == 'FUNCTION_REF':
             self.stack.append(op)
 
         elif name == 'FUNCTION_CALL':
-            print('considered this')
             func_name = self.stack.pop()
             arg_name = self.varTable[func_name[1][0]][0]
-            print('from now on',)
             i1 = Interpreter(self.varTable[func_name[1][0]][1], {
                 arg_name: func_name[1][1]
             })
