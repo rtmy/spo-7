@@ -59,7 +59,6 @@ class Lexer:
             return 'SYNCRONIZED'
         elif buffer == 'thread':
             return 'THREAD'
-        # TODO: для function_run, thread
         elif buffer == 'call':
             return 'FUNCTION_CALL'
         elif buffer == 'for':
@@ -180,6 +179,8 @@ class Node:
                 res.append(d.toPolishReverse())
         if self.value and self.value.name == 'FUNCTION_DEF':
             res = [('FUNCTION_DEF_END', 'FUNCTION_DEF_END')] + res
+        if self.value and self.value.name == 'SYNCRONIZED':
+            res = [('SYNCRONIZED_END', self.value.value)] + res
         if self.value:
             res.append((self.value.name, self.value.value))
         return res
@@ -215,11 +216,9 @@ class Parser:
         if n > len(self.tokenList):
             return None
         curTok = self.tokenList[n]
-        print('ct', curTok)
         node = Node(curTok)
         sum_n = 0
 
-        # TODO: объявление функции
         if curTok.name == 'FUNCTION_CALL':
             print('function call')
             func_name = self.match('VAR', n+1)
@@ -428,10 +427,7 @@ class HashSet:
         return str(ret)
 
 
-# TODO: выполнение функций с блокировками
 class Interpreter:
-    # TODO: интерпретатор должен сплодить самого себя и уметь выполнять инструкции поочередно
-    # например, для выполнения функции
     def __init__(self, operandList, varTable):
         self.operandList = operandList
         print('in op list:', self.operandList)
@@ -439,6 +435,7 @@ class Interpreter:
         self.opTable = {}
         self.op_id = 0
         self.stack = []
+        self.scheduledThreads = []
         self.readingFunction = False
 
     def next_step(self, op):
@@ -496,6 +493,7 @@ class Interpreter:
             self.varTable[op2_value].print()
 
         elif name == 'LESS_OP':
+            print('DEBUG', self.stack)
             op1 = self.stack.pop()
             op2 = self.stack.pop()
             op2_value = self.varTable[op2[1]]
@@ -555,17 +553,19 @@ class Interpreter:
         elif name == 'FUNCTION_CALL':
             func_name = self.stack.pop()
             arg_name = self.varTable[func_name[1][0]][0]
-            i1 = Interpreter(self.varTable[func_name[1][0]][1], {
-                arg_name: func_name[1][1]
-            })
-            i1()
 
-        elif name == 'THREAD':
-            # TODO: ключевое слово (тред название_функции) для вызова программы в треде
-            # перебираем треды и выполняем функции в каждом одну за одной
-            # Для каждого из треда, выполнить следующую инструкцию
-            # т.е. сначала первая команда из одной функции, потом первая из второй, и так далее до конца
-            pass
+            in_thread = value
+            if in_thread:
+                i1 = Interpreter(self.varTable[func_name[1][0]][1], {
+                        arg_name: func_name[1][1]
+                })
+                self.scheduledThreads.append(i1)
+            else:
+                i1 = Interpreter(self.varTable[func_name[1][0]][1], {
+                    arg_name: func_name[1][1]
+                })
+                i1()
+
 
         print('stack', self.stack)
         print(self.varTable)
@@ -585,6 +585,17 @@ class Interpreter:
             print('iteration', self.op_id, '/', len(self.operandList) -
                   1, self.operandList[self.op_id])
             self.next()
+
+        ic = 0
+        mx = max([len(i.operandList) for i in self.scheduledThreads])
+        while ic < mx:
+            for i in self.scheduledThreads:
+                i.next()
+            ic += 1
+
+        # перебираем треды и выполняем функции в каждом одну за одной
+        # Для каждого из треда, выполнить следующую инструкцию
+        # т.е. сначала первая команда из одной функции, потом первая из второй, и так далее до конца
 
 
 i = Interpreter(bucket, {})
