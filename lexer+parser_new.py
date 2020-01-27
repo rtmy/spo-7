@@ -127,15 +127,19 @@ class Lexer:
 # TODO: убираем синкронайзд - должны запускаться параллельно
 text = '''
 function testuno (x) {
+    syncronized l {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
+    }
 }
 
 function testdue (x) {
+    syncronized e {
         for (i = 0; i<x; i = i+1) {
             ;
         } 
+    }
 }
 
 
