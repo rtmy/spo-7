@@ -124,6 +124,7 @@ class Lexer:
 # }'''
 # text = 'x = hs; x set 3 4; x set 4 5; x [ 3 ];'
 
+# TODO: убираем синкронайзд - должны запускаться параллельно
 text = '''
 function testuno (x) {
     syncronized l {
@@ -427,6 +428,7 @@ class HashSet:
         return str(ret)
 
 
+lockTable = {}
 class Interpreter:
     def __init__(self, operandList, varTable):
         self.operandList = operandList
@@ -436,6 +438,8 @@ class Interpreter:
         self.op_id = 0
         self.stack = []
         self.scheduledThreads = []
+        self.waiting = False
+        self.lockedBy = None
         self.readingFunction = False
 
     def next_step(self, op):
@@ -566,6 +570,22 @@ class Interpreter:
                 })
                 i1()
 
+        elif name == 'SYNCRONIZED_END':
+            current_state = lockTable.get(value, None)
+            if current_state:
+                print('LOCKED, SHOULD W8')
+                self.waiting = True
+                self.lockedBy = value
+            else:
+                print('LOCKING, EXECUTING')
+                self.lockedBy = value
+                lockTable[value] = True
+                self.waiting = False
+
+        elif name == 'SYNCRONIZED':
+            print('UNLOCKING')
+            self.lockedBy = None
+            lockTable[value] = False
 
         print('stack', self.stack)
         print(self.varTable)
@@ -576,6 +596,12 @@ class Interpreter:
         print('-----')
 
     def next(self):
+        if not lockTable.get(self.lockedBy, None):
+            self.waiting = False
+
+        if self.waiting:
+            return
+
         op = self.operandList[self.op_id]
         self.next_step(op)
         self.op_id += 1
@@ -588,15 +614,14 @@ class Interpreter:
 
         ic = 0
         mx = max([len(i.operandList) for i in self.scheduledThreads])
-        while ic < mx:
+        while ic < mx * len(self.scheduledThreads):
             for i in self.scheduledThreads:
-                i.next()
+                if i.op_id < len(i.operandList):
+                    i.next()
             ic += 1
 
-        # перебираем треды и выполняем функции в каждом одну за одной
-        # Для каждого из треда, выполнить следующую инструкцию
-        # т.е. сначала первая команда из одной функции, потом первая из второй, и так далее до конца
 
+        print(self.scheduledThreads[0].op_id, self.scheduledThreads[1].op_id)
 
 i = Interpreter(bucket, {})
 i()
